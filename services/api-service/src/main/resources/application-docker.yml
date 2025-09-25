@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/speechtotext
+    username: speechtotext
+    password: ${DATABASE_PASSWORD}
+
+  jpa:
+    show-sql: false
+
+storage:
+  s3:
+    endpoint: ${S3_ENDPOINT}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    bucket-name: ${S3_BUCKET_NAME}
+
+transcription:
+  service:
+    base-url: ${TRANSCRIPTION_SERVICE_URL}
+
+logging:
+  level:
+    com.speechtotext: INFO
+    org.springframework.web: WARN
+    org.hibernate: WARN

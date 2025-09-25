@@ -1,0 +1,37 @@
+# Development profile configuration
+spring:
+  # Development-specific datasource
+  datasource:
+    url: jdbc:postgresql://localhost:5432/speechtotext
+    username: speechtotext
+    password: speechtotext123
+
+  # JPA configuration for development
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Development app settings
+app:
+  s3:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket-name: speechtotext-dev
+
+  # Transcription service URL for development
+  transcription:
+    service-url: http://localhost:8081
+    callback-url: http://localhost:8080/internal/v1/transcriptions
+
+# Development logging
+logging:
+  level:
+    com.speechtotext: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  file:
+    name: logs/api-service-dev.log

@@ -1,0 +1,6 @@
+rootProject.name = 'speech-to-text'
+
+include 'services:api-service'
+
+// Configure project directory mappings
+project(':services:api-service').projectDir = file('services/api-service')
