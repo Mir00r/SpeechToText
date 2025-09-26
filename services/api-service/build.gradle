@@ -2,6 +2,8 @@ plugins {
     id 'org.springframework.boot'
     id 'io.spring.dependency-management'
     id 'java'
+    id 'jacoco'
+    id 'com.diffplug.spotless' version '6.23.3'
 }
 
 description = 'Speech to Text API Service'
@@ -43,9 +45,11 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:minio:1.19.1'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
     testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.1'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
 
     // Development
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -58,7 +62,78 @@ bootJar {
     archiveFileName = 'api-service.jar'
 }
 
+// ========================================
+// TESTING CONFIGURATION
+// ========================================
+
 test {
     useJUnitPlatform()
     systemProperty 'spring.profiles.active', 'test'
+    finalizedBy jacocoTestReport
+}
+
+// Integration Tests
+task integrationTest(type: Test) {
+    useJUnitPlatform()
+    include '**/integration/**'
+    systemProperty 'spring.profiles.active', 'test'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter test
+    finalizedBy jacocoTestReport
+}
+
+check.dependsOn integrationTest
+
+// ========================================
+// CODE COVERAGE
+// ========================================
+
+jacoco {
+    toolVersion = '0.8.8'
+}
+
+jacocoTestReport {
+    dependsOn test
+    executionData fileTree(dir: "${buildDir}/jacoco", includes: ["*.exec"])
+    
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/dto/**',
+                '**/entity/**', 
+                '**/config/**',
+                '**/Application.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.75
+            }
+        }
+    }
+}
+
+// ========================================
+// CODE FORMATTING
+// ========================================
+
+spotless {
+    java {
+        googleJavaFormat('1.19.1')
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }

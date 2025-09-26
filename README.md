@@ -4,12 +4,15 @@ A production-ready backend system that converts audio files to text using Whispe
 
 ## 🎯 Implementation Status
 
-**Current Milestone: M3 - Transcription Service** ✅
+**Current Milestone: M6 - Tests & CI/CD** ✅
 
 **Completed Milestones:**
 - ✅ M1: Project Skeleton - Gradle multi-project, Docker Compose infrastructure  
 - ✅ M2: Core Spring Boot API with REST endpoints, database entities, and business logic
 - ✅ M3: WhisperX transcription service with alignment and diarization
+- ✅ M4: Integration Flow - Service-to-service communication with callbacks
+- ✅ M5: Async & Sync Behavior - Intelligent processing mode selection
+- ✅ M6: Tests & CI/CD - Comprehensive testing, quality gates, and automated deployment
 
 **Upcoming Milestones:**
 - [x] M1 - Project skeleton
@@ -17,7 +20,7 @@ A production-ready backend system that converts audio files to text using Whispe
 - [x] M3 - Transcription Service
 - [x] M4 - Integration Flow
 - [x] M5 - Async & Sync Behavior
-- [ ] M6 - Tests & CI/CD
+- [x] M6 - Tests & CI/CD
 - [ ] M7 - Production Documentation
 
 ## 🏗️ Architecture
@@ -522,3 +525,68 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - **Large File (> threshold)**: Upload → Create job → Background processing → Callback notification
 - **Explicit Sync**: Any file size can be forced to sync mode (with timeout protection)
 - **Explicit Async**: Even small files can be processed asynchronously if requested
+
+### M6 - Tests & CI/CD ✅
+
+**Comprehensive Testing Infrastructure:**
+- ✅ **Java Testing**:
+  - Unit tests with JUnit 5 and Mockito for all service layers
+  - Integration tests with TestContainers (PostgreSQL, MinIO mocking)
+  - Performance tests for concurrent uploads and database operations
+  - Web layer tests with MockMvc and comprehensive request/response validation
+  - Code coverage reporting with JaCoCo (75% minimum threshold)
+
+- ✅ **Python Testing**:
+  - Unit tests with pytest and FastAPI TestClient
+  - Async test support with pytest-asyncio
+  - Performance and load testing for transcription endpoints
+  - Security testing with bandit and safety dependency scanning
+  - Code coverage with pytest-cov (70% minimum threshold)
+
+- ✅ **Quality Assurance**:
+  - Java code formatting with Spotless (Google Java Format)
+  - Python code formatting with Black and import sorting with isort
+  - Linting with flake8 for Python code quality
+  - Pre-commit hooks for automated quality checks
+  - Comprehensive QA script (`scripts/run-qa.sh`) for local validation
+
+**CI/CD Pipeline (GitHub Actions):**
+- ✅ **Automated Testing**:
+  - Parallel execution of Java and Python test suites
+  - Integration with TestContainers for realistic database testing
+  - Performance test execution with detailed reporting
+  - Test result publishing with coverage reports and quality gates
+
+- ✅ **Security & Quality**:
+  - Trivy vulnerability scanning for dependencies and containers
+  - CodeQL static analysis for Java and Python code
+  - Bandit security scanning for Python code
+  - Safety checks for Python dependencies with known vulnerabilities
+  - Code coverage thresholds enforcement (fail build if below threshold)
+
+- ✅ **Docker & Deployment**:
+  - Multi-architecture Docker image builds (linux/amd64, linux/arm64)
+  - Container registry publishing to GitHub Container Registry
+  - Docker image caching for faster builds
+  - Integration smoke tests with Docker Compose
+  - Automated deployment pipeline for production releases
+
+- ✅ **Monitoring & Reporting**:
+  - Custom Micrometer metrics for transcription performance monitoring
+  - Comprehensive test reporting with JUnit XML and HTML formats
+  - Coverage reports with detailed line-by-line analysis
+  - Performance test results with throughput and latency metrics
+  - Build artifact management and cleanup policies
+
+**Development Workflow:**
+- **Local Development**: `scripts/run-qa.sh` for comprehensive pre-commit validation
+- **Pull Requests**: Full test suite execution with coverage reporting
+- **Main Branch**: Integration tests, security scans, and Docker builds
+- **Releases**: Production deployment with smoke tests and monitoring
+
+**Technical Highlights:**
+- **Test Coverage**: Java (75%+ required), Python (70%+ required)
+- **Performance**: Concurrent upload testing, memory usage validation, load testing
+- **Security**: Vulnerability scanning, dependency checks, container security
+- **Quality**: Automated formatting, linting, and code quality enforcement
+- **Reliability**: Integration tests with real databases and service communication
