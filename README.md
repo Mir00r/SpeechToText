@@ -16,6 +16,7 @@ A production-ready backend system that converts audio files to text using Whispe
 - ✅ M7: Production Documentation - Complete operational guides, monitoring, and deployment
 - ✅ **Enhancement**: Domain-Specific Exception Hierarchy - Comprehensive error handling system
 - ✅ **Enhancement**: Circuit Breaker Pattern - Fault tolerance with Resilience4j
+- ✅ **Enhancement**: Enhanced Health Check Indicators - Comprehensive system monitoring
 
 **All Milestones Completed:**
 - ✅ M1 - Project skeleton
@@ -616,7 +617,27 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - **Resource Protection**: Prevents thread exhaustion during service outages
 - **Operational Visibility**: Clear service health status and detailed metrics
 
-**Documentation**: See [Circuit Breaker Implementation Guide](docs/circuit-breaker-implementation.md) for detailed configuration and usage instructions.
+### Enhanced Health Check Indicators ✅
+**Comprehensive System Monitoring:**
+- **Database Health**: PostgreSQL connectivity, performance, and data integrity checks
+- **Storage Health**: S3/MinIO functionality testing with upload/download validation
+- **External Service Health**: Transcription service connectivity and capability monitoring
+- **System Resources**: JVM memory, disk space, and performance monitoring
+- **Circuit Breaker Health**: Enhanced circuit breaker state and metrics monitoring
+- **Business Logic Health**: Application-specific workflow and data integrity validation
+
+**Custom Health Endpoints:**
+- **Comprehensive Health**: `/internal/v1/health/comprehensive` - Full system status
+- **Quick Health**: `/internal/v1/health/quick` - Fast load balancer probes
+- **Component Details**: Individual component health with actionable metrics
+
+**Monitoring Integration:**
+- **Kubernetes Probes**: Liveness and readiness probe configuration
+- **Prometheus Metrics**: Health status and response time metrics
+- **Grafana Dashboards**: Pre-configured health monitoring visualizations
+- **Alerting Rules**: Automated health status alerts and escalation
+
+**Documentation**: See [Enhanced Health Indicators Guide](docs/enhanced-health-indicators.md) for detailed configuration and usage instructions.
 
 ## �📚 Complete Documentation Suite
 
