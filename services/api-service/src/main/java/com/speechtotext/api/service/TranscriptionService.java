@@ -9,6 +9,7 @@ import com.speechtotext.api.infra.s3.S3ClientAdapter;
 import com.speechtotext.api.mapper.JobMapper;
 import com.speechtotext.api.model.JobEntity;
 import com.speechtotext.api.repository.JobRepository;
+import com.speechtotext.api.strategy.QualityPreference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,7 @@ public class TranscriptionService {
     private final S3ClientAdapter s3ClientAdapter;
     private final JobMapper jobMapper;
     private final TranscriptionServiceClient transcriptionServiceClient;
+    private final ModelSelectionService modelSelectionService;
 
     @Value("${app.upload.max-file-size:104857600}") // 100MB default
     private long maxFileSize;
@@ -59,11 +61,13 @@ public class TranscriptionService {
     public TranscriptionService(JobRepository jobRepository, 
                               S3ClientAdapter s3ClientAdapter,
                               JobMapper jobMapper,
-                              TranscriptionServiceClient transcriptionServiceClient) {
+                              TranscriptionServiceClient transcriptionServiceClient,
+                              ModelSelectionService modelSelectionService) {
         this.jobRepository = jobRepository;
         this.s3ClientAdapter = s3ClientAdapter;
         this.jobMapper = jobMapper;
         this.transcriptionServiceClient = transcriptionServiceClient;
+        this.modelSelectionService = modelSelectionService;
     }
 
     /**
@@ -83,11 +87,18 @@ public class TranscriptionService {
             // Upload file to S3
             String storageUrl = s3ClientAdapter.uploadFile(file, filename);
 
+            // Select optimal model using strategy pattern
+            QualityPreference qualityPreference = QualityPreference.fromString(request.quality());
+            String selectedModel = modelSelectionService.selectModel(file, request.model(), request.language(), qualityPreference);
+
             // Create job entity
             JobEntity job = new JobEntity(filename, originalFilename, storageUrl);
-            job.setModel(request.model());
+            job.setModel(selectedModel);
             job.setLanguage(request.language());
             job.setFileSizeBytes(file.getSize());
+
+            logger.info("Selected model '{}' for file '{}' (quality: {}, user model: {})", 
+                       selectedModel, originalFilename, qualityPreference, request.model());
 
             // Save job to database
             job = jobRepository.save(job);

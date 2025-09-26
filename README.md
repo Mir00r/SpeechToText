@@ -16,6 +16,7 @@ A production-ready backend system that converts audio files to text using Whispe
 - ✅ M7: Production Documentation - Complete operational guides, monitoring, and deployment
 - ✅ **Enhancement**: Domain-Specific Exception Hierarchy - Comprehensive error handling system
 - ✅ **Enhancement**: Circuit Breaker Pattern - Fault tolerance with Resilience4j
+- ✅ **Enhancement**: Strategy Pattern for Model Selection - Intelligent model selection based on audio characteristics
 - ✅ **Enhancement**: Enhanced Health Check Indicators - Comprehensive system monitoring
 
 **All Milestones Completed:**
@@ -417,7 +418,8 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
   - Production-ready error handling and logging
 
 - ✅ **WhisperX Integration**:
-  - Multi-model support (tiny, base, small, medium, large)
+  - Intelligent model selection with Strategy pattern (auto, tiny, base, small, medium, large)
+  - Quality preferences (speed, balanced, accuracy, precision)
   - Automatic language detection and manual specification
   - Word-level timestamp alignment for precise timing
   - Optional speaker diarization with HuggingFace integration
@@ -616,6 +618,15 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - **Improved Resilience**: Fast failure detection and graceful service degradation
 - **Resource Protection**: Prevents thread exhaustion during service outages
 - **Operational Visibility**: Clear service health status and detailed metrics
+
+### Strategy Pattern for Model Selection ✨ *New*
+- **Intelligent Selection**: Automatically chooses optimal Whisper model based on file size, duration, language, and quality preferences
+- **Multiple Strategies**: Default, Performance-Optimized, and Accuracy-Focused selection algorithms
+- **Quality Modes**: Speed, Balanced, Accuracy, and Precision preferences for different use cases
+- **Auto-Selection API**: Enhanced transcription endpoint with "auto" model parameter and quality preference
+- **Model Information Endpoints**: New APIs for model characteristics, strategies, and selection preview
+- **Comprehensive Configuration**: Extensive configuration options with environment variable support
+- **Backward Compatible**: Maintains full compatibility with existing API calls
 
 ### Enhanced Health Check Indicators ✅
 **Comprehensive System Monitoring:**

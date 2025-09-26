@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -67,17 +66,20 @@ public class TranscriptionController {
         @Parameter(description = "Process synchronously if file is small enough")
         @RequestParam(value = "sync", defaultValue = "false") Boolean sync,
         
-        @Parameter(description = "Whisper model to use")
-        @RequestParam(value = "model", defaultValue = "base") String model,
+        @Parameter(description = "Whisper model to use ('auto' for intelligent selection)")
+        @RequestParam(value = "model", defaultValue = "auto") String model,
         
         @Parameter(description = "Enable speaker diarization")
-        @RequestParam(value = "diarize", defaultValue = "false") Boolean diarize
+        @RequestParam(value = "diarize", defaultValue = "false") Boolean diarize,
+        
+        @Parameter(description = "Quality preference for transcription")
+        @RequestParam(value = "quality", defaultValue = "balanced") String quality
     ) {
         try {
             logger.info("Received transcription request for file: {} (size: {} bytes)", 
                        file.getOriginalFilename(), file.getSize());
 
-            TranscriptionUploadRequest request = new TranscriptionUploadRequest(language, sync, model, diarize);
+            TranscriptionUploadRequest request = new TranscriptionUploadRequest(language, sync, model, diarize, quality);
             
             Object result = transcriptionService.createTranscriptionJob(file, request);
 

@@ -150,6 +150,14 @@ app:
   callback:
     base-url: ${CALLBACK_BASE_URL:http://api-service:8080}
 
+  # Model selection configuration
+  model-selection:
+    strategy: ${MODEL_SELECTION_STRATEGY:default} # Options: default, performance, accuracy
+    enable-dynamic: ${ENABLE_DYNAMIC_SELECTION:true}
+    enable-auto-selection: ${ENABLE_AUTO_SELECTION:true}
+    fallback-model: ${FALLBACK_MODEL:base}
+    max-processing-time-minutes: ${MAX_PROCESSING_TIME:30}
+
 # Transcription service client configuration
 transcription:
   service:
