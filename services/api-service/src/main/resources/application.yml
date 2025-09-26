@@ -98,6 +98,7 @@ app:
   transcription:
     service-url: ${TRANSCRIPTION_SERVICE_URL:http://transcription-service:8001}
     sync-threshold-seconds: ${SYNC_THRESHOLD:60}
+    sync-timeout-seconds: ${SYNC_TIMEOUT:120}
     
   # Callback configuration
   callback:

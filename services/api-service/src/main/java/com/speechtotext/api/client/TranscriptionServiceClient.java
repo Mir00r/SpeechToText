@@ -12,6 +12,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +27,14 @@ public class TranscriptionServiceClient {
 
     private final RestTemplate restTemplate;
     private final String callbackBaseUrl;
+    private final ObjectMapper objectMapper;
 
     public TranscriptionServiceClient(
             @Qualifier("transcriptionRestTemplate") RestTemplate restTemplate,
             @Value("${app.callback.base-url:http://api-service:8080}") String callbackBaseUrl) {
         this.restTemplate = restTemplate;
         this.callbackBaseUrl = callbackBaseUrl;
+        this.objectMapper = new ObjectMapper();
     }
 
     public void submitTranscriptionJob(UUID jobId, String s3Url, boolean enableDiarization, boolean enableAlignment) {
@@ -70,6 +74,58 @@ public class TranscriptionServiceClient {
         }
     }
 
+    /**
+     * Submit transcription job for synchronous processing and wait for result.
+     */
+    public TranscriptionCallbackRequest submitTranscriptionJobSync(UUID jobId, String s3Url, 
+                                                                  boolean enableDiarization, boolean enableAlignment, 
+                                                                  int timeoutSeconds) {
+        logger.info("Submitting sync transcription job {} to service with timeout {} seconds", jobId, timeoutSeconds);
+        
+        try {
+            String callbackUrl = callbackBaseUrl + "/internal/v1/transcriptions/" + jobId + "/callback";
+            
+            SyncTranscriptionRequest request = new SyncTranscriptionRequest(
+                    jobId.toString(),
+                    s3Url,
+                    callbackUrl,
+                    enableDiarization,
+                    enableAlignment,
+                    true // synchronous
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<SyncTranscriptionRequest> entity = new HttpEntity<>(request, headers);
+
+            logger.info("Submitting synchronous transcription job {} to transcription service", jobId);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    "/transcribe",
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                logger.error("Sync transcription failed for job {}, status: {}", jobId, response.getStatusCode());
+                throw new TranscriptionServiceException("Sync transcription failed: " + response.getStatusCode());
+            }
+
+            // Parse the response as a transcription result
+            try {
+                logger.info("Successfully received sync transcription result for job {}", jobId);
+                return objectMapper.readValue(response.getBody(), TranscriptionCallbackRequest.class);
+            } catch (Exception e) {
+                logger.error("Failed to parse synchronous transcription response for job {}", jobId, e);
+                throw new TranscriptionServiceException("Failed to parse transcription response", e);
+            }
+
+        } catch (RestClientException e) {
+            logger.error("Error calling transcription service for sync job {}", jobId, e);
+            throw new TranscriptionServiceException("Failed to communicate with transcription service", e);
+        }
+    }
+
     public static class TranscriptionRequest {
         @JsonProperty("job_id")
         public final String jobId;
@@ -93,6 +149,17 @@ public class TranscriptionServiceClient {
             this.callbackUrl = callbackUrl;
             this.enableDiarization = enableDiarization;
             this.enableAlignment = enableAlignment;
+        }
+    }
+
+    public static class SyncTranscriptionRequest extends TranscriptionRequest {
+        @JsonProperty("synchronous")
+        public final boolean synchronous;
+
+        public SyncTranscriptionRequest(String jobId, String s3Url, String callbackUrl, 
+                                      boolean enableDiarization, boolean enableAlignment, boolean synchronous) {
+            super(jobId, s3Url, callbackUrl, enableDiarization, enableAlignment);
+            this.synchronous = synchronous;
         }
     }
 

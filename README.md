@@ -16,7 +16,7 @@ A production-ready backend system that converts audio files to text using Whispe
 - [x] M2 - Core Spring Boot API  
 - [x] M3 - Transcription Service
 - [x] M4 - Integration Flow
-- [ ] M5 - Async & Sync Behavior
+- [x] M5 - Async & Sync Behavior
 - [ ] M6 - Tests & CI/CD
 - [ ] M7 - Production Documentation
 
@@ -484,3 +484,41 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - **Request Format**: JSON with job_id, s3_url, callback_url, and processing options (diarization, alignment)
 - **Callback Format**: Comprehensive callback with status, transcript_text, detailed segments, speaker information, and metadata
 - **Timestamp Storage**: Detailed transcription results stored as JSON including word-level alignments and speaker segments
+
+### M5 - Async & Sync Behavior ✅
+
+**Intelligent Processing Mode Selection:**
+- **Automatic Decision Logic**: Service automatically chooses sync/async based on file size and estimated duration
+- **User Override**: Explicit `sync=true/false` parameter overrides automatic decision
+- **Size-Based Heuristics**: Files < 1MB automatically processed synchronously
+- **Duration Estimation**: Rough audio duration estimation based on file size (1MB ≈ 60 seconds)
+- **Threshold Configuration**: Configurable sync threshold (default: 60 seconds)
+
+**Synchronous Processing:**
+- **Direct Response**: Returns complete transcription result immediately (HTTP 200)
+- **Timeout Protection**: Configurable timeout (default: 120 seconds) prevents hanging requests
+- **Error Fallback**: Failed sync requests properly marked as FAILED with detailed error messages
+- **Client Experience**: Immediate results for short audio files without polling
+
+**Asynchronous Processing:**
+- **Background Processing**: Long files processed in background with callback notifications
+- **Job Tracking**: Returns job ID and status URL for progress monitoring (HTTP 202)
+- **Webhook Callbacks**: Transcription service notifies API service upon completion
+- **Scalability**: Non-blocking for large files that take minutes to process
+
+**Enhanced API Responses:**
+- **Content Negotiation**: Different response types based on processing mode
+- **HTTP Status Codes**: 200 for completed sync, 202 for accepted async jobs
+- **Response Format**: `TranscriptionResponse` for sync, `TranscriptionJobResponse` for async
+- **Error Handling**: Proper error responses with detailed messages and error codes
+
+**Configuration Management:**
+- **Environment Variables**: `SYNC_THRESHOLD` and `SYNC_TIMEOUT` for fine-tuning
+- **Profile Support**: Different thresholds for dev/prod environments
+- **Service Communication**: Enhanced client with both sync and async submission methods
+
+**Processing Flow Examples:**
+- **Small File (< 1MB)**: Upload → Process → Return transcript immediately
+- **Large File (> threshold)**: Upload → Create job → Background processing → Callback notification
+- **Explicit Sync**: Any file size can be forced to sync mode (with timeout protection)
+- **Explicit Async**: Even small files can be processed asynchronously if requested

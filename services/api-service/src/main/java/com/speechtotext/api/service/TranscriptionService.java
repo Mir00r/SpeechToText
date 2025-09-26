@@ -52,6 +52,9 @@ public class TranscriptionService {
     @Value("${app.transcription.sync-threshold-seconds:60}")
     private int syncThresholdSeconds;
 
+    @Value("${app.transcription.sync-timeout-seconds:120}")
+    private int syncTimeoutSeconds;
+
     public TranscriptionService(JobRepository jobRepository, 
                               S3ClientAdapter s3ClientAdapter,
                               JobMapper jobMapper,
@@ -90,31 +93,14 @@ public class TranscriptionService {
 
             logger.info("Created transcription job {} for file {}", job.getId(), originalFilename);
 
-            // Submit job to transcription service
-            try {
-                transcriptionServiceClient.submitTranscriptionJob(
-                    job.getId(),
-                    storageUrl,
-                    request.diarize() != null ? request.diarize() : false,
-                    true // always enable alignment for better results
-                );
-                
-                // Update status to processing
-                job.setStatus(JobEntity.JobStatus.PROCESSING);
-                job.setStartedAt(LocalDateTime.now());
-                jobRepository.save(job);
-                
-            } catch (TranscriptionServiceClient.TranscriptionServiceException e) {
-                logger.error("Failed to submit job {} to transcription service", job.getId(), e);
-                // Update job status to failed
-                job.setStatus(JobEntity.JobStatus.FAILED);
-                job.setErrorMessage("Failed to submit job to transcription service: " + e.getMessage());
-                job.setFinishedAt(LocalDateTime.now());
-                jobRepository.save(job);
+            // Determine processing mode (sync vs async)
+            boolean shouldProcessSync = shouldProcessSynchronously(file, request);
+            
+            if (shouldProcessSync) {
+                return processSynchronously(job, request);
+            } else {
+                return processAsynchronously(job, request);
             }
-
-            // For now, always return async response (sync processing will be added in M5)
-            return jobMapper.toTranscriptionJobResponse(job);
 
         } catch (Exception e) {
             logger.error("Failed to create transcription job for file: {}", file.getOriginalFilename(), e);
@@ -294,5 +280,117 @@ public class TranscriptionService {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         return UUID.randomUUID().toString() + extension;
+    }
+
+    /**
+     * Determine if file should be processed synchronously.
+     */
+    private boolean shouldProcessSynchronously(MultipartFile file, TranscriptionUploadRequest request) {
+        // If user explicitly requested sync/async, honor that
+        if (request.synchronous() != null) {
+            return request.synchronous();
+        }
+        
+        // For very small files, default to sync
+        if (file.getSize() < 1_000_000) { // < 1MB
+            return true;
+        }
+        
+        // For larger files, estimate duration and decide
+        // Rough estimation: 1 minute of audio ≈ 1MB (varies by quality)
+        double estimatedDurationSeconds = file.getSize() / 1_000_000.0 * 60;
+        
+        logger.debug("File size: {} bytes, estimated duration: {} seconds, threshold: {} seconds", 
+                    file.getSize(), estimatedDurationSeconds, syncThresholdSeconds);
+        
+        return estimatedDurationSeconds <= syncThresholdSeconds;
+    }
+
+    /**
+     * Process transcription synchronously and return complete result.
+     */
+    private Object processSynchronously(JobEntity job, TranscriptionUploadRequest request) {
+        logger.info("Processing job {} synchronously", job.getId());
+        
+        try {
+            // Update status to processing
+            job.setStatus(JobEntity.JobStatus.PROCESSING);
+            job.setStartedAt(LocalDateTime.now());
+            jobRepository.save(job);
+
+            // Call transcription service synchronously
+            TranscriptionCallbackRequest result = transcriptionServiceClient.submitTranscriptionJobSync(
+                job.getId(),
+                job.getStorageUrl(),
+                request.diarize() != null ? request.diarize() : false,
+                true, // always enable alignment for better results
+                syncTimeoutSeconds
+            );
+
+            // Process the result immediately
+            handleTranscriptionCallback(job.getId(), result);
+
+            // Return the completed transcription response
+            return jobMapper.toTranscriptionResponse(jobRepository.findById(job.getId()).orElse(job));
+
+        } catch (TranscriptionServiceClient.TranscriptionServiceException e) {
+            logger.error("Synchronous transcription failed for job {}", job.getId(), e);
+            
+            // Update job status to failed
+            job.setStatus(JobEntity.JobStatus.FAILED);
+            job.setErrorMessage("Synchronous transcription failed: " + e.getMessage());
+            job.setFinishedAt(LocalDateTime.now());
+            jobRepository.save(job);
+            
+            // Return error response
+            throw new RuntimeException("Synchronous transcription failed: " + e.getMessage());
+        } catch (Exception e) {
+            logger.error("Unexpected error during synchronous processing for job {}", job.getId(), e);
+            
+            // Update job status to failed
+            job.setStatus(JobEntity.JobStatus.FAILED);
+            job.setErrorMessage("Internal error during synchronous processing");
+            job.setFinishedAt(LocalDateTime.now());
+            jobRepository.save(job);
+            
+            throw new RuntimeException("Synchronous transcription failed due to internal error");
+        }
+    }
+
+    /**
+     * Process transcription asynchronously and return job info.
+     */
+    private Object processAsynchronously(JobEntity job, TranscriptionUploadRequest request) {
+        logger.info("Processing job {} asynchronously", job.getId());
+        
+        try {
+            // Submit job to transcription service for async processing
+            transcriptionServiceClient.submitTranscriptionJob(
+                job.getId(),
+                job.getStorageUrl(),
+                request.diarize() != null ? request.diarize() : false,
+                true // always enable alignment for better results
+            );
+            
+            // Update status to processing
+            job.setStatus(JobEntity.JobStatus.PROCESSING);
+            job.setStartedAt(LocalDateTime.now());
+            jobRepository.save(job);
+            
+            // Return async job response
+            return jobMapper.toTranscriptionJobResponse(job);
+            
+        } catch (TranscriptionServiceClient.TranscriptionServiceException e) {
+            logger.error("Failed to submit job {} to transcription service", job.getId(), e);
+            
+            // Update job status to failed
+            job.setStatus(JobEntity.JobStatus.FAILED);
+            job.setErrorMessage("Failed to submit job to transcription service: " + e.getMessage());
+            job.setFinishedAt(LocalDateTime.now());
+            jobRepository.save(job);
+            
+            // Return the failed job response
+            return jobMapper.toTranscriptionJobResponse(job);
+        }
     }
 }
