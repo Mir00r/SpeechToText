@@ -4,18 +4,21 @@ A production-ready backend system that converts audio files to text using Whispe
 
 ## 🎯 Implementation Status
 
-**Current Milestone: M2 - Core Spring Boot API** ✅
+**Current Milestone: M3 - Transcription Service** ✅
 
 **Completed Milestones:**
 - ✅ M1: Project Skeleton - Gradle multi-project, Docker Compose infrastructure  
 - ✅ M2: Core Spring Boot API with REST endpoints, database entities, and business logic
+- ✅ M3: WhisperX transcription service with alignment and diarization
 
 **Upcoming Milestones:**
-- M3: WhisperX transcription service implementation
-- M4: Integration flow between services
-- M5: Async & sync processing modes
-- M6: Tests, CI, and infrastructure
-- M7: Production documentation and examples
+- [x] M1 - Project skeleton
+- [x] M2 - Core Spring Boot API  
+- [x] M3 - Transcription Service
+- [x] M4 - Integration Flow
+- [ ] M5 - Async & Sync Behavior
+- [ ] M6 - Tests & CI/CD
+- [ ] M7 - Production Documentation
 
 ## 🏗️ Architecture
 
@@ -37,7 +40,7 @@ A production-ready backend system that converts audio files to text using Whispe
 ### Prerequisites
 
 - Docker & Docker Compose
-- Java 25+ (for local development)
+- Java 21+ (for local development)
 - Python 3.11+ (for local development)
 
 ### Run with Docker Compose
@@ -396,3 +399,88 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - Comprehensive error handling and validation
 - Structured logging with correlation IDs
 - Health checks and metrics endpoints (Actuator)
+
+### M3 - WhisperX Transcription Service ✅
+
+**Implemented Features:**
+- ✅ **FastAPI Application**:
+  - Async/sync transcription endpoints with comprehensive request/response models
+  - Health checks and service readiness validation
+  - Prometheus metrics integration
+  - Production-ready error handling and logging
+
+- ✅ **WhisperX Integration**:
+  - Multi-model support (tiny, base, small, medium, large)
+  - Automatic language detection and manual specification
+  - Word-level timestamp alignment for precise timing
+  - Optional speaker diarization with HuggingFace integration
+  - GPU acceleration support with fallback to CPU
+
+- ✅ **Advanced Processing Pipeline**:
+  - Configurable compute types (float16, float32, int8) for memory optimization
+  - Batch processing with adjustable batch sizes
+  - Model caching for improved performance
+  - Background task processing for async operations
+
+- ✅ **Storage Integration**:
+  - S3/MinIO download and upload of audio files and results
+  - Automatic transcript and timestamp file generation
+  - Temporary file cleanup and resource management
+  - Presigned URL support for secure file access
+
+- ✅ **Callback System**:
+  - HTTP webhook callbacks to API service with retry logic
+  - Exponential backoff for failed callback attempts
+  - Comprehensive callback payload with all processing metadata
+  - Idempotent callback handling
+
+- ✅ **Production Features**:
+  - Multi-stage Docker builds (CPU/GPU variants)
+  - Comprehensive test suite with mocking
+  - Environment-based configuration
+  - Resource cleanup and memory management
+  - Structured logging with correlation IDs
+
+**Technical Highlights:**
+- **Performance**: GPU acceleration, model caching, efficient batch processing
+- **Reliability**: Retry mechanisms, error handling, resource cleanup
+- **Scalability**: Stateless design, horizontal scaling support
+- **Observability**: Health checks, metrics, structured logging
+- **Security**: Non-root containers, input validation, secure file handling
+
+**API Endpoints:**
+- `POST /transcribe` - Process audio transcription with WhisperX
+- `GET /health` - Service health and readiness check
+- `GET /models` - List available Whisper models
+- `GET /metrics` - Prometheus metrics endpoint
+
+### M4 - Integration Flow ✅
+
+**Service-to-Service Communication:**
+- **TranscriptionServiceClient**: HTTP client for calling transcription service endpoints with proper error handling and timeouts
+- **RestTemplate Configuration**: Configured with connection pooling, timeouts (300s), and proper JSON serialization
+- **Callback Mechanism**: Internal endpoint `/internal/v1/transcriptions/{id}/callback` for receiving transcription results
+
+**API Integration Flow:**
+1. **File Upload & Job Creation**: Spring API receives file → validates → uploads to S3 → creates job (PENDING)
+2. **Service Invocation**: API calls transcription service `/transcribe` with job_id, s3_url, and callback_url
+3. **Job Status Update**: Job status changes to PROCESSING when successfully submitted to transcription service
+4. **Async Processing**: Transcription service processes audio in background using WhisperX
+5. **Result Callback**: Transcription service calls back API with results (COMPLETED/FAILED status)
+6. **Database Update**: API updates job with transcript text, timestamps JSON, and metadata
+
+**Enhanced Error Handling:**
+- **Service Communication Failures**: Jobs marked as FAILED if transcription service is unreachable
+- **Callback Validation**: Comprehensive validation of callback payloads with proper error responses
+- **Status Transitions**: Proper job status lifecycle management (PENDING → PROCESSING → COMPLETED/FAILED)
+- **Timeout Handling**: Configurable timeouts for transcription service calls
+
+**Configuration:**
+- Service URLs configurable via environment variables (`TRANSCRIPTION_SERVICE_URL`, `CALLBACK_BASE_URL`)
+- HTTP client timeouts and connection pooling properly configured
+- Docker Compose networking enables service-to-service communication
+
+**Data Exchange:**
+- **Request Format**: JSON with job_id, s3_url, callback_url, and processing options (diarization, alignment)
+- **Callback Format**: Comprehensive callback with status, transcript_text, detailed segments, speaker information, and metadata
+- **Timestamp Storage**: Detailed transcription results stored as JSON including word-level alignments and speaker segments

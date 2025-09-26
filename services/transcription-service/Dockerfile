@@ -1,40 +1,46 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Multi-stage Dockerfile for transcription service
+# Supports both CPU and GPU environments
 
-# Set working directory
-WORKDIR /app
+FROM python:3.11-slim as base
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
+    build-essential \
     git \
+    ffmpeg \
+    sox \
+    libsndfile1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Create non-root user
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN useradd --create-home --shell /bin/bash app
+USER app
+WORKDIR /home/app
+
+# Set Python path
+ENV PYTHONPATH=/home/app
+ENV PATH="/home/app/.local/bin:$PATH"
+
+# Copy requirements first for better caching
+COPY --chown=app:app requirements.txt ./
+RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app/ app/
+COPY --chown=app:app app/ ./app/
+COPY --chown=app:app tests/ ./tests/
 
-# Change ownership
-RUN chown -R appuser:appgroup /app
+# Create directories for models and cache
+RUN mkdir -p /home/app/.cache/whisper /home/app/.cache/huggingface
 
-USER appuser
-
+# Expose port
 EXPOSE 8081
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8081/health || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8081/health')"
 
-# Run the application
+# Default CMD - can be overridden for GPU
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]
 
 # Optional GPU support instructions (commented out for CPU-only setup)

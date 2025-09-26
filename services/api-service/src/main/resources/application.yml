@@ -96,9 +96,18 @@ app:
 
   # Transcription service configuration
   transcription:
-    service-url: ${TRANSCRIPTION_SERVICE_URL:http://localhost:8081}
+    service-url: ${TRANSCRIPTION_SERVICE_URL:http://transcription-service:8001}
     sync-threshold-seconds: ${SYNC_THRESHOLD:60}
-    callback-url: ${CALLBACK_URL:http://api-service:8080/internal/v1/transcriptions}
+    
+  # Callback configuration
+  callback:
+    base-url: ${CALLBACK_BASE_URL:http://api-service:8080}
+
+# Transcription service client configuration
+transcription:
+  service:
+    base-url: ${TRANSCRIPTION_SERVICE_URL:http://transcription-service:8001}
+    timeout: ${TRANSCRIPTION_TIMEOUT:300}
 
 # Logging configuration
 logging:

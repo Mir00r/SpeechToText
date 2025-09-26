@@ -28,6 +28,9 @@ dependencies {
     // AWS S3 (MinIO compatible)
     implementation 'software.amazon.awssdk:s3:2.21.29'
 
+    // HTTP Client
+    implementation 'org.apache.httpcomponents.client5:httpclient5:5.3'
+
     // Rate Limiting
     implementation 'com.github.vladimir-bukhtoyarov:bucket4j-core:7.6.0'
 
