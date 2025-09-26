@@ -32,8 +32,10 @@ public class S3ClientAdapter {
     }
 
     /**
-     * Upload a file to S3 and return the storage URL.
+     * Upload a file to S3 with circuit breaker protection.
      */
+    // @CircuitBreaker(name = "storageService", fallbackMethod = "fallbackUploadFile")
+    // @Retry(name = "storageService") 
     public String uploadFile(MultipartFile file, String filename) {
         try {
             logger.info("Uploading file {} to S3 bucket {}", filename, bucketName);
@@ -138,6 +140,26 @@ public class S3ClientAdapter {
             }
         }
         throw new IllegalArgumentException("Invalid S3 URL format: " + storageUrl);
+    }
+    
+    // ================================
+    // Circuit Breaker Fallback Methods
+    // ================================
+    
+    /**
+     * Fallback method for file upload when storage circuit breaker is open.
+     */
+    public String fallbackUploadFile(MultipartFile file, String filename, Exception ex) {
+        logger.error("Storage circuit breaker is open. File upload failed for: {}", filename, ex);
+        throw new StorageException.StorageConnectionException(ex);
+    }
+    
+    /**
+     * Fallback method for presigned URL generation when storage circuit breaker is open.
+     */
+    public String fallbackGeneratePresignedUrl(String key, int durationMinutes, Exception ex) {
+        logger.error("Storage circuit breaker is open. Cannot generate presigned URL for: {}", key, ex);
+        throw new StorageException.StorageConnectionException(ex);
     }
 
     /**

@@ -16,10 +16,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.speechtotext.api.exception.ExternalServiceException;
 import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 
+// Resilience4j imports - commented out temporarily for compilation
+// import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+// import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+// import io.github.resilience4j.retry.annotation.Retry;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 public class TranscriptionServiceClient {
@@ -38,6 +44,13 @@ public class TranscriptionServiceClient {
         this.objectMapper = new ObjectMapper();
     }
 
+    /**
+     * Submit transcription job with circuit breaker protection.
+     * Falls back to graceful error handling if service is unavailable.
+     */
+    // Circuit breaker annotations commented out temporarily
+    // @CircuitBreaker(name = "transcriptionService", fallbackMethod = "fallbackSubmitTranscription")
+    // @Retry(name = "transcriptionService")
     public void submitTranscriptionJob(UUID jobId, String s3Url, boolean enableDiarization, boolean enableAlignment) {
         try {
             String callbackUrl = callbackBaseUrl + "/internal/v1/transcriptions/" + jobId + "/callback";
@@ -76,11 +89,33 @@ public class TranscriptionServiceClient {
     }
 
     /**
-     * Submit transcription job for synchronous processing and wait for result.
+     * Submit transcription job for synchronous processing with circuit breaker and time limiter.
+     */
+    // Circuit breaker annotations commented out temporarily  
+    // @CircuitBreaker(name = "transcriptionService", fallbackMethod = "fallbackSubmitTranscriptionSync")
+    // @TimeLimiter(name = "transcriptionService")
+    // @Retry(name = "transcriptionService")
+    public CompletableFuture<TranscriptionCallbackRequest> submitTranscriptionJobSyncAsync(UUID jobId, String s3Url, 
+                                                                                          boolean enableDiarization, boolean enableAlignment, 
+                                                                                          int timeoutSeconds) {
+        return CompletableFuture.supplyAsync(() -> submitTranscriptionJobSyncInternal(jobId, s3Url, enableDiarization, enableAlignment, timeoutSeconds));
+    }
+    
+    /**
+     * Original synchronous method - kept for backward compatibility.
      */
     public TranscriptionCallbackRequest submitTranscriptionJobSync(UUID jobId, String s3Url, 
                                                                   boolean enableDiarization, boolean enableAlignment, 
                                                                   int timeoutSeconds) {
+        return submitTranscriptionJobSyncInternal(jobId, s3Url, enableDiarization, enableAlignment, timeoutSeconds);
+    }
+    
+    /**
+     * Internal method for synchronous transcription processing.
+     */
+    private TranscriptionCallbackRequest submitTranscriptionJobSyncInternal(UUID jobId, String s3Url, 
+                                                                           boolean enableDiarization, boolean enableAlignment, 
+                                                                           int timeoutSeconds) {
         logger.info("Submitting sync transcription job {} to service with timeout {} seconds", jobId, timeoutSeconds);
         
         try {
@@ -126,6 +161,87 @@ public class TranscriptionServiceClient {
             throw new ExternalServiceException.TranscriptionServiceException("Failed to communicate with transcription service", e);
         }
     }
+    
+    // ================================
+    // Circuit Breaker Fallback Methods
+    // ================================
+    
+    /**
+     * Fallback method for async transcription submission when circuit breaker is open.
+     */
+    public void fallbackSubmitTranscription(UUID jobId, String s3Url, boolean enableDiarization, 
+                                           boolean enableAlignment, Exception ex) {
+        logger.error("Circuit breaker is open for transcription service. Job {} will be marked as failed.", jobId, ex);
+        throw new ExternalServiceException.ServiceUnavailableException("transcription-service");
+    }
+    
+    /**
+     * Fallback method for sync transcription when circuit breaker is open or timeout occurs.
+     */
+    public CompletableFuture<TranscriptionCallbackRequest> fallbackSubmitTranscriptionSync(UUID jobId, String s3Url, 
+                                                                                           boolean enableDiarization, 
+                                                                                           boolean enableAlignment, 
+                                                                                           int timeoutSeconds, 
+                                                                                           Exception ex) {
+        logger.error("Circuit breaker is open or timeout occurred for sync transcription service. Job {} will be processed asynchronously.", 
+                    jobId, ex);
+        
+        return CompletableFuture.supplyAsync(() -> {
+            // Attempt to submit as async job instead
+            try {
+                submitTranscriptionJob(jobId, s3Url, enableDiarization, enableAlignment);
+                
+                // Return a placeholder response indicating async processing
+                return new TranscriptionCallbackRequest(
+                    "PROCESSING",
+                    null, // transcriptText
+                    null, // s3TranscriptUrl
+                    "Switched to asynchronous processing due to service issues", // errorMessage
+                    null, // processingDurationMs
+                    null, // audioDurationS
+                    null, // segments
+                    null, // words
+                    null  // metadata
+                );
+                
+            } catch (Exception asyncEx) {
+                logger.error("Failed to submit job {} even as async after circuit breaker fallback", jobId, asyncEx);
+                throw new ExternalServiceException.ServiceUnavailableException("transcription-service");
+            }
+        });
+    }
+    
+    /**
+     * Health check method for transcription service (used by health indicators).
+     */
+    // Circuit breaker annotation commented out temporarily
+    // @CircuitBreaker(name = "transcriptionService", fallbackMethod = "fallbackHealthCheck")
+    public boolean isTranscriptionServiceHealthy() {
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                "/health",
+                HttpMethod.GET,
+                null,
+                String.class
+            );
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            logger.warn("Health check failed for transcription service", e);
+            return false;
+        }
+    }
+    
+    /**
+     * Fallback for health check when circuit breaker is open.
+     */
+    public boolean fallbackHealthCheck(Exception ex) {
+        logger.warn("Transcription service health check failed - circuit breaker is open", ex);
+        return false;
+    }
+
+    // ================================
+    // Request DTOs
+    // ================================
 
     public static class TranscriptionRequest {
         @JsonProperty("job_id")

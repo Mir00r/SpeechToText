@@ -4,6 +4,7 @@ import com.speechtotext.api.client.TranscriptionServiceClient;
 import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 import com.speechtotext.api.dto.TranscriptionResponse;
 import com.speechtotext.api.dto.TranscriptionUploadRequest;
+import com.speechtotext.api.exception.ExternalServiceException;
 import com.speechtotext.api.infra.s3.S3ClientAdapter;
 import com.speechtotext.api.mapper.JobMapper;
 import com.speechtotext.api.model.JobEntity;
@@ -333,7 +334,7 @@ public class TranscriptionService {
             // Return the completed transcription response
             return jobMapper.toTranscriptionResponse(jobRepository.findById(job.getId()).orElse(job));
 
-        } catch (TranscriptionServiceClient.TranscriptionServiceException e) {
+        } catch (ExternalServiceException.TranscriptionServiceException e) {
             logger.error("Synchronous transcription failed for job {}", job.getId(), e);
             
             // Update job status to failed
@@ -380,7 +381,7 @@ public class TranscriptionService {
             // Return async job response
             return jobMapper.toTranscriptionJobResponse(job);
             
-        } catch (TranscriptionServiceClient.TranscriptionServiceException e) {
+        } catch (ExternalServiceException.TranscriptionServiceException e) {
             logger.error("Failed to submit job {} to transcription service", job.getId(), e);
             
             // Update job status to failed

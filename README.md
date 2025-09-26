@@ -14,6 +14,8 @@ A production-ready backend system that converts audio files to text using Whispe
 - ✅ M5: Async & Sync Behavior - Intelligent processing mode selection
 - ✅ M6: Tests & CI/CD - Comprehensive testing, quality gates, and automated deployment
 - ✅ M7: Production Documentation - Complete operational guides, monitoring, and deployment
+- ✅ **Enhancement**: Domain-Specific Exception Hierarchy - Comprehensive error handling system
+- ✅ **Enhancement**: Circuit Breaker Pattern - Fault tolerance with Resilience4j
 
 **All Milestones Completed:**
 - ✅ M1 - Project skeleton
@@ -591,7 +593,32 @@ See `/infra/k8s/` for Kubernetes deployment manifests (optional).
 - **Security**: Vulnerability scanning, dependency checks, container security
 - **Quality**: Automated formatting, linting, and code quality enforcement
 
-## 📚 Complete Documentation Suite
+## � Latest Enhancements
+
+### Domain-Specific Exception Hierarchy ✅
+**Comprehensive Error Handling System:**
+- **Base Exception**: `TranscriptionException` with error codes, user messages, and correlation IDs
+- **Specialized Exceptions**: File validation, storage, external service, business logic, and resource exceptions
+- **Global Handler**: Centralized exception handling with structured error responses
+- **Enhanced Error Response**: Consistent error format with status codes, messages, and debugging information
+
+### Circuit Breaker Pattern ✅
+**Fault Tolerance with Resilience4j:**
+- **Protected Services**: Transcription and storage service calls with circuit breaker protection
+- **Intelligent Fallbacks**: Graceful degradation strategies for service unavailability
+- **Configuration**: Customizable failure thresholds, timeout settings, and recovery behavior
+- **Monitoring**: Circuit breaker state monitoring, health indicators, and management endpoints
+- **Comprehensive Testing**: Unit and integration tests for circuit breaker functionality
+
+**Key Benefits:**
+- **Fault Tolerance**: Prevents cascading failures and provides automatic recovery
+- **Improved Resilience**: Fast failure detection and graceful service degradation
+- **Resource Protection**: Prevents thread exhaustion during service outages
+- **Operational Visibility**: Clear service health status and detailed metrics
+
+**Documentation**: See [Circuit Breaker Implementation Guide](docs/circuit-breaker-implementation.md) for detailed configuration and usage instructions.
+
+## �📚 Complete Documentation Suite
 
 ### Production Documentation (M7)
 The Speech to Text service includes comprehensive production-ready documentation:

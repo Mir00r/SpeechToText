@@ -120,3 +120,52 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Circuit Breaker and Resilience Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      transcriptionService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 10s
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      storageService:
+        registerHealthIndicator: true
+        slidingWindowSize: 8
+        permittedNumberOfCallsInHalfOpenState: 2
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 4
+        waitDurationInOpenState: 15s
+        failureRateThreshold: 60
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+  timelimiter:
+    instances:
+      transcriptionService:
+        timeoutDuration: 2m
+        cancelRunningFuture: true
+      storageService:
+        timeoutDuration: 30s
+        cancelRunningFuture: true
+
+  retry:
+    instances:
+      transcriptionService:
+        maxAttempts: 3
+        waitDuration: 2s
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+      storageService:
+        maxAttempts: 2
+        waitDuration: 1s
+        retryExceptions:
+          - java.net.ConnectException
