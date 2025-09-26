@@ -13,6 +13,7 @@ import org.springframework.web.client.RestClientException;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.speechtotext.api.exception.ExternalServiceException;
 import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 
 import org.slf4j.Logger;
@@ -65,12 +66,12 @@ public class TranscriptionServiceClient {
                 logger.info("Successfully submitted transcription job {}", jobId);
             } else {
                 logger.error("Failed to submit transcription job {}, status: {}", jobId, response.getStatusCode());
-                throw new TranscriptionServiceException("Failed to submit transcription job: " + response.getStatusCode());
+                throw new ExternalServiceException.TranscriptionServiceException("Failed to submit transcription job: " + response.getStatusCode());
             }
 
         } catch (RestClientException e) {
             logger.error("Error calling transcription service for job {}", jobId, e);
-            throw new TranscriptionServiceException("Failed to communicate with transcription service", e);
+            throw new ExternalServiceException.TranscriptionServiceException("Failed to communicate with transcription service", e);
         }
     }
 
@@ -108,7 +109,7 @@ public class TranscriptionServiceClient {
 
             if (!response.getStatusCode().is2xxSuccessful()) {
                 logger.error("Sync transcription failed for job {}, status: {}", jobId, response.getStatusCode());
-                throw new TranscriptionServiceException("Sync transcription failed: " + response.getStatusCode());
+                throw new ExternalServiceException.TranscriptionServiceException("Sync transcription failed: " + response.getStatusCode());
             }
 
             // Parse the response as a transcription result
@@ -117,12 +118,12 @@ public class TranscriptionServiceClient {
                 return objectMapper.readValue(response.getBody(), TranscriptionCallbackRequest.class);
             } catch (Exception e) {
                 logger.error("Failed to parse synchronous transcription response for job {}", jobId, e);
-                throw new TranscriptionServiceException("Failed to parse transcription response", e);
+                throw new ExternalServiceException.InvalidServiceResponseException("transcription-service", "Failed to parse response: " + e.getMessage());
             }
 
         } catch (RestClientException e) {
             logger.error("Error calling transcription service for sync job {}", jobId, e);
-            throw new TranscriptionServiceException("Failed to communicate with transcription service", e);
+            throw new ExternalServiceException.TranscriptionServiceException("Failed to communicate with transcription service", e);
         }
     }
 
@@ -160,16 +161,6 @@ public class TranscriptionServiceClient {
                                       boolean enableDiarization, boolean enableAlignment, boolean synchronous) {
             super(jobId, s3Url, callbackUrl, enableDiarization, enableAlignment);
             this.synchronous = synchronous;
-        }
-    }
-
-    public static class TranscriptionServiceException extends RuntimeException {
-        public TranscriptionServiceException(String message) {
-            super(message);
-        }
-
-        public TranscriptionServiceException(String message, Throwable cause) {
-            super(message, cause);
         }
     }
 }

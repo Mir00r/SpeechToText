@@ -18,5 +18,13 @@ public record ErrorResponse(
     String details,
     
     @Schema(description = "Timestamp of error", example = "2023-12-01T10:00:00Z")
-    String timestamp
-) {}
+    String timestamp,
+    
+    @Schema(description = "Request ID for troubleshooting", example = "req_123456789")
+    String requestId
+) {
+    // Backward compatibility constructor
+    public ErrorResponse(String code, String message, String details, String timestamp) {
+        this(code, message, details, timestamp, null);
+    }
+}

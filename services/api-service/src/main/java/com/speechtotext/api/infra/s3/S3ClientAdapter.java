@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import com.speechtotext.api.exception.StorageException;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -60,7 +61,7 @@ public class S3ClientAdapter {
 
         } catch (Exception e) {
             logger.error("Failed to upload file {} to S3", filename, e);
-            throw new RuntimeException("Failed to upload file to storage", e);
+            throw new StorageException.FileUploadException(filename, e);
         }
     }
 
@@ -80,7 +81,7 @@ public class S3ClientAdapter {
 
         } catch (Exception e) {
             logger.error("Failed to generate presigned URL for key {}", key, e);
-            throw new RuntimeException("Failed to generate download URL", e);
+            throw new StorageException.PresignedUrlException("download", e);
         }
     }
 
