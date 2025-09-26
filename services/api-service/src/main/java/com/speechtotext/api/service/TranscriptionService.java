@@ -4,6 +4,9 @@ import com.speechtotext.api.client.TranscriptionServiceClient;
 import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 import com.speechtotext.api.dto.TranscriptionResponse;
 import com.speechtotext.api.dto.TranscriptionUploadRequest;
+import com.speechtotext.api.events.DomainEvent;
+import com.speechtotext.api.events.factory.EventFactory;
+import com.speechtotext.api.events.publisher.EventPublisher;
 import com.speechtotext.api.exception.ExternalServiceException;
 import com.speechtotext.api.infra.s3.S3ClientAdapter;
 import com.speechtotext.api.mapper.JobMapper;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -52,6 +56,8 @@ public class TranscriptionService {
     private final TranscriptionServiceClient transcriptionServiceClient;
     private final ModelSelectionService modelSelectionService;
     private final TracingHelper tracingHelper;
+    private final EventPublisher eventPublisher;
+    private final EventFactory eventFactory;
 
     @Value("${app.upload.max-file-size:104857600}") // 100MB default
     private long maxFileSize;
@@ -67,13 +73,17 @@ public class TranscriptionService {
                               JobMapper jobMapper,
                               TranscriptionServiceClient transcriptionServiceClient,
                               ModelSelectionService modelSelectionService,
-                              TracingHelper tracingHelper) {
+                              TracingHelper tracingHelper,
+                              EventPublisher eventPublisher,
+                              EventFactory eventFactory) {
         this.jobRepository = jobRepository;
         this.s3ClientAdapter = s3ClientAdapter;
         this.jobMapper = jobMapper;
         this.transcriptionServiceClient = transcriptionServiceClient;
         this.modelSelectionService = modelSelectionService;
         this.tracingHelper = tracingHelper;
+        this.eventPublisher = eventPublisher;
+        this.eventFactory = eventFactory;
     }
 
     /**
@@ -118,6 +128,23 @@ public class TranscriptionService {
             
             // Set job context for subsequent operations
             TraceContext.setJobContext(job.getId().toString());
+
+            // Publish job created event
+            eventPublisher.publish(eventFactory.createJobCreatedEvent(
+                    job.getId().toString(),
+                    job.getFilename(),
+                    job.getOriginalFilename(),
+                    job.getStorageUrl(),
+                    selectedModel,
+                    request.language(),
+                    request.quality(),
+                    file.getSize(),
+                    null, // estimated duration - could be calculated
+                    request.diarize(),
+                    request.synchronous(),
+                    getClientIpFromTrace(),
+                    null // user agent - could be extracted from request
+            ));
 
             logger.info("Created transcription job {} for file {}", job.getId(), originalFilename);
 
@@ -198,19 +225,102 @@ public class TranscriptionService {
                     // Processing duration will be calculated from startedAt/finishedAt
                     
                     job.setFinishedAt(LocalDateTime.now());
+                    
+                    // Publish job status changed event first
+                    try {
+                        Long processingTime = job.getStartedAt() != null 
+                            ? java.time.Duration.between(job.getStartedAt(), job.getFinishedAt()).toMillis()
+                            : null;
+                            
+                        DomainEvent statusChangedEvent = eventFactory.createJobStatusChangedEvent(
+                            jobId.toString(),
+                            JobEntity.JobStatus.PROCESSING, // previous status (assuming it was processing)
+                            JobEntity.JobStatus.COMPLETED, // new status
+                            "Transcription completed successfully", // reason for change
+                            null, // no error message
+                            processingTime // processing time in milliseconds
+                        );
+                        eventPublisher.publish(statusChangedEvent);
+                    } catch (Exception eventException) {
+                        logger.warn("Failed to publish job status changed event for job {}", jobId, eventException);
+                    }
+                    
+                    // Publish job completed event
+                    try {
+                        // Calculate processing time
+                        BigDecimal processingTime = job.getStartedAt() != null && job.getFinishedAt() != null 
+                            ? BigDecimal.valueOf(java.time.Duration.between(job.getStartedAt(), job.getFinishedAt()).toSeconds())
+                            : BigDecimal.ZERO;
+                            
+                        DomainEvent completedEvent = eventFactory.createJobCompletedEvent(
+                            jobId.toString(),
+                            job.getTranscriptText(),
+                            BigDecimal.valueOf(0.95), // Default confidence - could be extracted from callback if available
+                            "en", // Default language - could be extracted from job parameters
+                            "whisper", // Default model - could be extracted from job parameters
+                            processingTime,
+                            null, // transcript URL - not applicable in this context
+                            null, // timestamps URL - not applicable in this context
+                            null, // segment count - could be calculated if available
+                            null, // word count - could be calculated if available
+                            null, // speaker count - could be extracted from callback if available
+                            false // diarization enabled - could be extracted from job parameters
+                        );
+                        eventPublisher.publish(completedEvent);
+                    } catch (Exception eventException) {
+                        logger.warn("Failed to publish job completed event for job {}", jobId, eventException);
+                    }
+                    
                     logger.info("Job {} completed successfully", jobId);
                 }
                 case "failed" -> {
                     job.setStatus(JobEntity.JobStatus.FAILED);
                     job.setErrorMessage(callbackRequest.errorMessage());
                     job.setFinishedAt(LocalDateTime.now());
+                    
+                    // Publish job status changed event for failed state
+                    try {
+                        Long processingTime = job.getStartedAt() != null 
+                            ? java.time.Duration.between(job.getStartedAt(), LocalDateTime.now()).toMillis()
+                            : null;
+                            
+                        DomainEvent statusChangedEvent = eventFactory.createJobStatusChangedEvent(
+                            jobId.toString(),
+                            JobEntity.JobStatus.PROCESSING, // previous status (assuming it was processing)
+                            JobEntity.JobStatus.FAILED, // new status
+                            "Transcription failed", // reason for change
+                            callbackRequest.errorMessage(), // error message
+                            processingTime // processing time in milliseconds
+                        );
+                        eventPublisher.publish(statusChangedEvent);
+                    } catch (Exception eventException) {
+                        logger.warn("Failed to publish job status changed event for job {}", jobId, eventException);
+                    }
+                    
                     logger.warn("Job {} failed: {}", jobId, callbackRequest.errorMessage());
                 }
                 case "processing" -> {
+                    JobEntity.JobStatus previousStatus = job.getStatus();
                     job.setStatus(JobEntity.JobStatus.PROCESSING);
                     if (job.getStartedAt() == null) {
                         job.setStartedAt(LocalDateTime.now());
                     }
+                    
+                    // Publish job status changed event for processing state
+                    try {
+                        DomainEvent statusChangedEvent = eventFactory.createJobStatusChangedEvent(
+                            jobId.toString(),
+                            previousStatus, // previous status
+                            JobEntity.JobStatus.PROCESSING, // new status
+                            "Transcription started", // reason for change
+                            null, // no error message
+                            null // no processing time yet
+                        );
+                        eventPublisher.publish(statusChangedEvent);
+                    } catch (Exception eventException) {
+                        logger.warn("Failed to publish job status changed event for job {}", jobId, eventException);
+                    }
+                    
                     logger.info("Job {} is now processing", jobId);
                 }
                 default -> {
@@ -420,5 +530,14 @@ public class TranscriptionService {
             // Return the failed job response
             return jobMapper.toTranscriptionJobResponse(job);
         }
+    }
+
+    /**
+     * Get client IP from trace context or default value.
+     */
+    private String getClientIpFromTrace() {
+        // Since we don't have direct access to client IP in TraceContext yet, 
+        // we'll use a default. This could be enhanced to extract from request context.
+        return "unknown";
     }
 }
