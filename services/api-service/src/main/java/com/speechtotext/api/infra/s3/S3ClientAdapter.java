@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import com.speechtotext.api.exception.StorageException;
+import com.speechtotext.api.trace.TraceContext;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -38,7 +39,8 @@ public class S3ClientAdapter {
     // @Retry(name = "storageService") 
     public String uploadFile(MultipartFile file, String filename) {
         try {
-            logger.info("Uploading file {} to S3 bucket {}", filename, bucketName);
+            logger.info("Uploading file {} to S3 bucket {} [correlationId={}]", 
+                       filename, bucketName, TraceContext.getCorrelationId());
 
             // Ensure bucket exists
             ensureBucketExists();
@@ -57,12 +59,14 @@ public class S3ClientAdapter {
             s3Client.putObject(putRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
             String storageUrl = String.format("s3://%s/%s", bucketName, key);
-            logger.info("Successfully uploaded file to {}", storageUrl);
+            logger.info("Successfully uploaded file to {} [correlationId={}]", 
+                       storageUrl, TraceContext.getCorrelationId());
 
             return storageUrl;
 
         } catch (Exception e) {
-            logger.error("Failed to upload file {} to S3", filename, e);
+            logger.error("Failed to upload file {} to S3 [correlationId={}]", 
+                        filename, TraceContext.getCorrelationId(), e);
             throw new StorageException.FileUploadException(filename, e);
         }
     }

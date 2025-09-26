@@ -10,6 +10,9 @@ import com.speechtotext.api.mapper.JobMapper;
 import com.speechtotext.api.model.JobEntity;
 import com.speechtotext.api.repository.JobRepository;
 import com.speechtotext.api.strategy.QualityPreference;
+import com.speechtotext.api.trace.TraceConstants;
+import com.speechtotext.api.trace.TraceContext;
+import com.speechtotext.api.trace.TracingHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +51,7 @@ public class TranscriptionService {
     private final JobMapper jobMapper;
     private final TranscriptionServiceClient transcriptionServiceClient;
     private final ModelSelectionService modelSelectionService;
+    private final TracingHelper tracingHelper;
 
     @Value("${app.upload.max-file-size:104857600}") // 100MB default
     private long maxFileSize;
@@ -62,19 +66,22 @@ public class TranscriptionService {
                               S3ClientAdapter s3ClientAdapter,
                               JobMapper jobMapper,
                               TranscriptionServiceClient transcriptionServiceClient,
-                              ModelSelectionService modelSelectionService) {
+                              ModelSelectionService modelSelectionService,
+                              TracingHelper tracingHelper) {
         this.jobRepository = jobRepository;
         this.s3ClientAdapter = s3ClientAdapter;
         this.jobMapper = jobMapper;
         this.transcriptionServiceClient = transcriptionServiceClient;
         this.modelSelectionService = modelSelectionService;
+        this.tracingHelper = tracingHelper;
     }
 
     /**
      * Create a new transcription job.
      */
     public Object createTranscriptionJob(MultipartFile file, TranscriptionUploadRequest request) {
-        logger.info("Creating transcription job for file: {}", file.getOriginalFilename());
+        logger.info("Creating transcription job for file: {} [correlationId={}]", 
+                   file.getOriginalFilename(), TraceContext.getCorrelationId());
 
         // Validate file
         validateFile(file);
@@ -84,12 +91,17 @@ public class TranscriptionService {
             String originalFilename = file.getOriginalFilename();
             String filename = generateUniqueFilename(originalFilename);
 
-            // Upload file to S3
-            String storageUrl = s3ClientAdapter.uploadFile(file, filename);
+            // Upload file to S3 with tracing
+            String storageUrl = tracingHelper.executeS3Operation(filename, TraceConstants.OP_S3_UPLOAD, 
+                () -> {
+                    TraceContext.setFileContext(filename, file.getSize());
+                    return s3ClientAdapter.uploadFile(file, filename);
+                });
 
             // Select optimal model using strategy pattern
             QualityPreference qualityPreference = QualityPreference.fromString(request.quality());
-            String selectedModel = modelSelectionService.selectModel(file, request.model(), request.language(), qualityPreference);
+            String selectedModel = tracingHelper.executeWithTraceSupplier(TraceConstants.OP_MODEL_SELECTION,
+                () -> modelSelectionService.selectModel(file, request.model(), request.language(), qualityPreference));
 
             // Create job entity
             JobEntity job = new JobEntity(filename, originalFilename, storageUrl);
@@ -97,11 +109,15 @@ public class TranscriptionService {
             job.setLanguage(request.language());
             job.setFileSizeBytes(file.getSize());
 
-            logger.info("Selected model '{}' for file '{}' (quality: {}, user model: {})", 
-                       selectedModel, originalFilename, qualityPreference, request.model());
+            logger.info("Selected model '{}' for file '{}' (quality: {}, user model: {}) [correlationId={}]", 
+                       selectedModel, originalFilename, qualityPreference, request.model(), TraceContext.getCorrelationId());
 
-            // Save job to database
-            job = jobRepository.save(job);
+            // Save job to database with tracing
+            final JobEntity jobToSave = job;
+            job = tracingHelper.executeDatabaseOperation("save_job", () -> jobRepository.save(jobToSave));
+            
+            // Set job context for subsequent operations
+            TraceContext.setJobContext(job.getId().toString());
 
             logger.info("Created transcription job {} for file {}", job.getId(), originalFilename);
 

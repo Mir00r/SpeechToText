@@ -38,6 +38,9 @@ dependencies {
 
     // Circuit Breaker and Resilience
     implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'
+    
+    // Structured Logging for JSON output
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
     implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.1.0'
     implementation 'io.github.resilience4j:resilience4j-timelimiter:2.1.0'
     implementation 'io.github.resilience4j:resilience4j-retry:2.1.0'

@@ -5,6 +5,8 @@ import com.speechtotext.api.dto.TranscriptionJobResponse;
 import com.speechtotext.api.dto.TranscriptionResponse;
 import com.speechtotext.api.dto.TranscriptionUploadRequest;
 import com.speechtotext.api.service.TranscriptionService;
+import com.speechtotext.api.trace.TraceConstants;
+import com.speechtotext.api.trace.TraceContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -76,38 +78,54 @@ public class TranscriptionController {
         @RequestParam(value = "quality", defaultValue = "balanced") String quality
     ) {
         try {
-            logger.info("Received transcription request for file: {} (size: {} bytes)", 
-                       file.getOriginalFilename(), file.getSize());
+            // Set file and transcription context for tracing
+            TraceContext.setFileContext(file.getOriginalFilename(), file.getSize());
+            TraceContext.setTranscriptionContext(language, model);
+            
+            logger.info("Received transcription request for file: {} (size: {} bytes) [correlationId={}]", 
+                       file.getOriginalFilename(), file.getSize(), TraceContext.getCorrelationId());
 
             TranscriptionUploadRequest request = new TranscriptionUploadRequest(language, sync, model, diarize, quality);
             
             Object result = transcriptionService.createTranscriptionJob(file, request);
 
-            if (result instanceof TranscriptionResponse) {
-                // Sync processing completed
+            if (result instanceof TranscriptionResponse response) {
+                // Set job context for future operations
+                TraceContext.setJobContext(response.id().toString());
+                logger.info("Sync transcription completed for job: {} [correlationId={}]", 
+                           response.id(), TraceContext.getCorrelationId());
                 return ResponseEntity.ok(result);
+            } else if (result instanceof TranscriptionJobResponse jobResponse) {
+                // Set job context for future operations
+                TraceContext.setJobContext(jobResponse.id().toString());
+                logger.info("Async transcription job created: {} [correlationId={}]", 
+                           jobResponse.id(), TraceContext.getCorrelationId());
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
             } else {
-                // Async job created
                 return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
             }
 
         } catch (IllegalArgumentException e) {
-            logger.warn("Bad request for transcription: {}", e.getMessage());
+            logger.warn("Bad request for transcription: {} [correlationId={}]", 
+                       e.getMessage(), TraceContext.getCorrelationId());
             ErrorResponse error = new ErrorResponse(
                 "INVALID_REQUEST", 
                 e.getMessage(), 
                 null,
-                Instant.now().toString()
+                Instant.now().toString(),
+                TraceContext.getRequestId()
             );
             return ResponseEntity.badRequest().body(error);
 
         } catch (Exception e) {
-            logger.error("Internal error during transcription request", e);
+            logger.error("Internal error during transcription request [correlationId={}]", 
+                        TraceContext.getCorrelationId(), e);
             ErrorResponse error = new ErrorResponse(
                 "INTERNAL_ERROR", 
                 "An unexpected error occurred", 
                 e.getMessage(),
-                Instant.now().toString()
+                Instant.now().toString(),
+                TraceContext.getRequestId()
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
@@ -129,28 +147,40 @@ public class TranscriptionController {
         @PathVariable UUID id
     ) {
         try {
-            logger.debug("Getting transcription job: {}", id);
+            // Set job context for tracing
+            TraceContext.setJobContext(id.toString());
+            
+            logger.debug("Getting transcription job: {} [correlationId={}]", 
+                        id, TraceContext.getCorrelationId());
             
             TranscriptionResponse response = transcriptionService.getTranscriptionJob(id);
+            
+            logger.debug("Retrieved transcription job: {} with status: {} [correlationId={}]", 
+                        id, response.status(), TraceContext.getCorrelationId());
+            
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
-            logger.warn("Job not found: {}", id);
+            logger.warn("Job not found: {} [correlationId={}]", 
+                       id, TraceContext.getCorrelationId());
             ErrorResponse error = new ErrorResponse(
                 "JOB_NOT_FOUND", 
                 "Transcription job not found", 
                 "Job ID: " + id,
-                Instant.now().toString()
+                Instant.now().toString(),
+                TraceContext.getRequestId()
             );
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
 
         } catch (Exception e) {
-            logger.error("Error retrieving transcription job: {}", id, e);
+            logger.error("Error retrieving transcription job: {} [correlationId={}]", 
+                        id, TraceContext.getCorrelationId(), e);
             ErrorResponse error = new ErrorResponse(
                 "INTERNAL_ERROR", 
                 "An unexpected error occurred", 
                 e.getMessage(),
-                Instant.now().toString()
+                Instant.now().toString(),
+                TraceContext.getRequestId()
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }

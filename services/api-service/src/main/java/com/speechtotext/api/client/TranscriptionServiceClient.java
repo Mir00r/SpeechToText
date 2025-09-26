@@ -15,6 +15,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.speechtotext.api.exception.ExternalServiceException;
 import com.speechtotext.api.dto.TranscriptionCallbackRequest;
+import com.speechtotext.api.trace.TraceContext;
+import com.speechtotext.api.trace.TracingHelper;
 
 // Resilience4j imports - commented out temporarily for compilation
 // import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -35,13 +37,16 @@ public class TranscriptionServiceClient {
     private final RestTemplate restTemplate;
     private final String callbackBaseUrl;
     private final ObjectMapper objectMapper;
+    private final TracingHelper tracingHelper;
 
     public TranscriptionServiceClient(
             @Qualifier("transcriptionRestTemplate") RestTemplate restTemplate,
-            @Value("${app.callback.base-url:http://api-service:8080}") String callbackBaseUrl) {
+            @Value("${app.callback.base-url:http://api-service:8080}") String callbackBaseUrl,
+            TracingHelper tracingHelper) {
         this.restTemplate = restTemplate;
         this.callbackBaseUrl = callbackBaseUrl;
         this.objectMapper = new ObjectMapper();
+        this.tracingHelper = tracingHelper;
     }
 
     /**
@@ -63,11 +68,14 @@ public class TranscriptionServiceClient {
                     enableAlignment
             );
 
-            HttpHeaders headers = new HttpHeaders();
+            // Create headers with tracing information
+            HttpHeaders headers = tracingHelper.createTracingHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<TranscriptionRequest> entity = new HttpEntity<>(request, headers);
 
-            logger.info("Submitting transcription job {} to transcription service", jobId);
+            logger.info("Submitting transcription job {} to transcription service [correlationId={}]", 
+                       jobId, TraceContext.getCorrelationId());
+            
             ResponseEntity<String> response = restTemplate.exchange(
                     "/transcribe",
                     HttpMethod.POST,
@@ -76,14 +84,17 @@ public class TranscriptionServiceClient {
             );
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                logger.info("Successfully submitted transcription job {}", jobId);
+                logger.info("Successfully submitted transcription job {} [correlationId={}]", 
+                           jobId, TraceContext.getCorrelationId());
             } else {
-                logger.error("Failed to submit transcription job {}, status: {}", jobId, response.getStatusCode());
+                logger.error("Failed to submit transcription job {}, status: {} [correlationId={}]", 
+                            jobId, response.getStatusCode(), TraceContext.getCorrelationId());
                 throw new ExternalServiceException.TranscriptionServiceException("Failed to submit transcription job: " + response.getStatusCode());
             }
 
         } catch (RestClientException e) {
-            logger.error("Error calling transcription service for job {}", jobId, e);
+            logger.error("Error calling transcription service for job {} [correlationId={}]", 
+                        jobId, TraceContext.getCorrelationId(), e);
             throw new ExternalServiceException.TranscriptionServiceException("Failed to communicate with transcription service", e);
         }
     }

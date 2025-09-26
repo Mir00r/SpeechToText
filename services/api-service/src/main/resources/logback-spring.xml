@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Define properties for log patterns and file paths -->
+    <springProperty name="LOG_LEVEL" source="logging.level.root" defaultValue="INFO"/>
+    <springProperty name="APP_NAME" source="spring.application.name" defaultValue="speechtotext-api"/>
+    
+    <!-- Console appender with structured JSON logging for production -->
+    <springProfile name="prod,docker">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <timeZone>UTC</timeZone>
+                        <fieldName>timestamp</fieldName>
+                    </timestamp>
+                    <version/>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                        <shortenedLoggerNameLength>40</shortenedLoggerNameLength>
+                    </loggerName>
+                    <mdc>
+                        <fieldName>trace</fieldName>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <arguments>
+                        <includeNonStructuredArguments>true</includeNonStructuredArguments>
+                    </arguments>
+                    <stackTrace>
+                        <fieldName>stackTrace</fieldName>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>
+                            {
+                                "application": "${APP_NAME}",
+                                "service": "api-service",
+                                "environment": "#asJson{${SPRING_PROFILES_ACTIVE:dev}}",
+                                "pid": "${PID:-unknown}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+            </encoder>
+        </appender>
+    </springProfile>
+    
+    <!-- Console appender with human-readable format for development -->
+    <springProfile name="dev,test,local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-NO-CORR}] [%X{operation:-NO-OP}] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+    
+    <!-- File appender with structured JSON logging -->
+    <springProfile name="prod,docker">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/${APP_NAME}.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <timeZone>UTC</timeZone>
+                        <fieldName>timestamp</fieldName>
+                    </timestamp>
+                    <version/>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                        <shortenedLoggerNameLength>40</shortenedLoggerNameLength>
+                    </loggerName>
+                    <mdc>
+                        <fieldName>trace</fieldName>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <arguments>
+                        <includeNonStructuredArguments>true</includeNonStructuredArguments>
+                    </arguments>
+                    <stackTrace>
+                        <fieldName>stackTrace</fieldName>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>
+                            {
+                                "application": "${APP_NAME}",
+                                "service": "api-service",
+                                "environment": "#asJson{${SPRING_PROFILES_ACTIVE:dev}}",
+                                "pid": "${PID:-unknown}",
+                                "hostname": "${HOSTNAME:-unknown}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/${APP_NAME}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                    <maxFileSize>100MB</maxFileSize>
+                </timeBasedFileNamingAndTriggeringPolicy>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>10GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+    </springProfile>
+    
+    <!-- File appender with human-readable format for development -->
+    <springProfile name="dev,test,local">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/${APP_NAME}.log</file>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-NO-CORR}] [%X{requestId:-NO-REQ}] [%X{operation:-NO-OP}] [%X{jobId:-NO-JOB}] %logger{36} - %msg%n</pattern>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/${APP_NAME}.%d{yyyy-MM-dd}.log</fileNamePattern>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+    </springProfile>
+    
+    <!-- Async wrapper for performance -->
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <neverBlock>true</neverBlock>
+    </appender>
+    
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <neverBlock>true</neverBlock>
+    </appender>
+    
+    <!-- Logger configurations -->
+    <logger name="com.speechtotext" level="DEBUG" additivity="false">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+    
+    <!-- External service call tracing -->
+    <logger name="com.speechtotext.api.client" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+    
+    <!-- Request tracing -->
+    <logger name="com.speechtotext.api.trace" level="DEBUG" additivity="false">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+    
+    <!-- Spring framework logs -->
+    <logger name="org.springframework.web" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+    
+    <!-- Database/JPA logs -->
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN"/>
+    <logger name="org.springframework.jdbc.core" level="WARN"/>
+    
+    <!-- Circuit breaker logs -->
+    <logger name="io.github.resilience4j" level="DEBUG" additivity="false">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+    
+    <!-- Health check logs -->
+    <logger name="org.springframework.boot.actuator.health" level="INFO"/>
+    
+    <!-- Root logger -->
+    <root level="${LOG_LEVEL}">
+        <appender-ref ref="ASYNC_CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </root>
+    
+</configuration>

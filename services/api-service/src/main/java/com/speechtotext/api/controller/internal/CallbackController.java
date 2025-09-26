@@ -1,7 +1,8 @@
 package com.speechtotext.api.controller.internal;
 
-import com.speechtotext.api.model.JobEntity;
+import com.speechtotext.api.dto.TranscriptionCallbackRequest;
 import com.speechtotext.api.service.TranscriptionService;
+import com.speechtotext.api.trace.TraceContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -38,33 +39,24 @@ public class CallbackController {
         @RequestBody TranscriptionCallbackRequest request
     ) {
         try {
-            logger.info("Received callback for job {} with status: {}", id, request.status());
-
-            JobEntity.JobStatus status = JobEntity.JobStatus.valueOf(request.status().toUpperCase());
+            // Set job context for tracing
+            TraceContext.setJobContext(id.toString());
             
-            transcriptionService.updateJobResult(
-                id, 
-                status, 
-                request.transcriptText(), 
-                request.timestampsJson(), 
-                request.errorMessage()
-            );
+            logger.info("Received callback for job {} with status: {} [correlationId={}]", 
+                       id, request.status(), TraceContext.getCorrelationId());
+
+            transcriptionService.handleTranscriptionCallback(id, request);
+
+            logger.info("Successfully processed callback for job {} [correlationId={}]", 
+                       id, TraceContext.getCorrelationId());
 
             return ResponseEntity.ok().build();
 
         } catch (Exception e) {
-            logger.error("Error processing callback for job: {}", id, e);
+            logger.error("Error processing callback for job: {} [correlationId={}]", 
+                        id, TraceContext.getCorrelationId(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
 
-    /**
-     * Request DTO for transcription callbacks.
-     */
-    public record TranscriptionCallbackRequest(
-        String status,
-        String transcriptText,
-        String timestampsJson,
-        String errorMessage
-    ) {}
 }
