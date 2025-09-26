@@ -141,12 +141,4 @@ jacocoTestCoverageVerification {
 // ========================================
 // CODE FORMATTING
 // ========================================
-
-spotless {
-    java {
-        googleJavaFormat('1.19.1')
-        removeUnusedImports()
-        trimTrailingWhitespace()
-        endWithNewline()
-    }
-}
+// Spotless configuration is inherited from root build.gradle

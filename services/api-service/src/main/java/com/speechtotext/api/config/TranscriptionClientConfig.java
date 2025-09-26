@@ -22,9 +22,12 @@ public class TranscriptionClientConfig {
     public RestTemplate transcriptionRestTemplate(RestTemplateBuilder builder) {
         return builder
                 .rootUri(transcriptionServiceBaseUrl)
-                .setConnectTimeout(Duration.ofSeconds(10))
-                .setReadTimeout(Duration.ofSeconds(timeoutSeconds))
-                .requestFactory(HttpComponentsClientHttpRequestFactory::new)
+                .requestFactory(() -> {
+                    HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
+                    factory.setConnectTimeout(Duration.ofSeconds(10));
+                    factory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
+                    return factory;
+                })
                 .build();
     }
 }

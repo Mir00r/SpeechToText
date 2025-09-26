@@ -49,10 +49,10 @@ public class CircuitBreakerMonitorService {
                 circuitBreaker.getState().name(),
                 metrics.getFailureRate(),
                 metrics.getSlowCallRate(),
-                metrics.getNumberOfSuccessfulCalls(),
-                metrics.getNumberOfFailedCalls(),
-                metrics.getNumberOfSlowCalls(),
-                metrics.getNumberOfNotPermittedCalls()
+                (int) metrics.getNumberOfSuccessfulCalls(),
+                (int) metrics.getNumberOfFailedCalls(),
+                (int) metrics.getNumberOfSlowCalls(),
+                (int) metrics.getNumberOfNotPermittedCalls()
             );
         } catch (Exception e) {
             logger.warn("Failed to get circuit breaker metrics", e);
